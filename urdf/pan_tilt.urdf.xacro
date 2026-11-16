@@ -1,0 +1,127 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="pan_tilt">
+
+  <xacro:arg name="use_mock_hardware" default="false"/>
+  <xacro:arg name="port_name" default="/dev/ttyUSB0"/>
+  <xacro:arg name="baud_rate" default="57600"/>
+
+  <xacro:include filename="pan_tilt_limits.xacro"/>
+  <xacro:include filename="pan_tilt.ros2_control.xacro"/>
+
+  <!-- ==================================================================
+       Dimensions measured from the Onshape assembly ("Pan-Tilt-Camera.step").
+       Meters. If the CAD changes, re-export the meshes AND update these.
+
+       Zero pose (pan = 0, tilt = 0): camera optical axis level and pointing
+       along base_link +X. In the CAD file (cad/Pan-Tilt-Camera.step) the camera sits at pan -96.41 deg,
+       tilt -2.28 deg (2.28 deg looking up).
+       ================================================================== -->
+  <!-- pan axis = base_link Z axis. Pan joint frame sits on top of the base hub -->
+  <xacro:property name="pan_joint_z"      value="0.0115"/>
+  <!-- tilt axis is 24 mm (d) BEHIND the pan axis (opposite the camera), 31.9 mm above base bottom -->
+  <xacro:property name="tilt_axis_offset" value="0.0240"/>
+  <xacro:property name="tilt_axis_z"      value="0.0204"/>  <!-- above pan_joint_z -->
+  <!-- camera_link: on the optical axis at the front of the lens.
+       The optical axis passes through the tilt axis (0.001 mm) and 0.29 mm beside the pan axis. -->
+  <xacro:property name="lens_front_x"     value="0.114519"/>
+  <xacro:property name="optical_axis_y"   value="0.00029"/>
+
+  <!-- Calibration: angle (deg) at which the SERVO reads 0 (tick 2048) relative to the
+       geometric zero pose above. Leave 0 if the horns were clocked so that tick 2048 =
+       camera level and facing forward; otherwise measure on the hardware and enter it here. -->
+  <xacro:property name="pan_zero_offset_deg"  value="0.0"/>
+  <xacro:property name="tilt_zero_offset_deg" value="0.0"/>
+
+  <xacro:property name="mesh_dir" value="package://pan_tilt_camera/meshes"/>
+
+  <material name="dxl_black"><color rgba="0.12 0.12 0.12 1"/></material>
+  <material name="base_grey"><color rgba="0.55 0.55 0.58 1"/></material>
+  <material name="shroud">   <color rgba="0.20 0.45 0.75 1"/></material>
+  <material name="fork">     <color rgba="0.80 0.27 0.25 1"/></material>
+  <material name="metal">    <color rgba="0.78 0.78 0.80 1"/></material>
+  <material name="brass">    <color rgba="0.85 0.68 0.25 1"/></material>
+  <material name="camera">   <color rgba="0.25 0.70 0.30 1"/></material>
+
+  <!-- One <visual> per sub-group so each can have its own color.
+       Meshes are already in the link frame and in meters: no origin / scale needed. -->
+  <xacro:macro name="mesh_visual" params="file material">
+    <visual>
+      <geometry><mesh filename="${mesh_dir}/visual/${file}.stl"/></geometry>
+      <material name="${material}"/>
+    </visual>
+  </xacro:macro>
+  <xacro:macro name="hull_collision" params="link">
+    <collision>
+      <geometry><mesh filename="${mesh_dir}/collision/${link}.stl"/></geometry>
+    </collision>
+  </xacro:macro>
+
+  <!-- Fixed: mounting base, thrust bearing, and the pan horn (bolted to the hub) -->
+  <link name="base_link">
+    <xacro:mesh_visual file="base_link__base_plate"     material="base_grey"/>
+    <xacro:mesh_visual file="base_link__thrust_bearing" material="brass"/>
+    <xacro:mesh_visual file="base_link__pan_horn"       material="metal"/>
+    <xacro:hull_collision link="base_link"/>
+  </link>
+
+  <!-- Pans: servo case (+ inserts, screws, connectors, idler shoulder bolt/spacer) and the shroud -->
+  <link name="pan_link">
+    <xacro:mesh_visual file="pan_link__servo"      material="dxl_black"/>
+    <xacro:mesh_visual file="pan_link__pan_shroud" material="shroud"/>
+    <xacro:hull_collision link="pan_link"/>
+  </link>
+
+  <!-- Tilts: fork, tilt horn + screw, idler flanged bearing -->
+  <link name="tilt_link">
+    <xacro:mesh_visual file="tilt_link__tilt_fork"     material="fork"/>
+    <xacro:mesh_visual file="tilt_link__tilt_hardware" material="metal"/>
+    <xacro:hull_collision link="tilt_link"/>
+  </link>
+
+  <link name="camera_link">
+    <xacro:mesh_visual file="camera_link__camera" material="camera"/>
+    <xacro:hull_collision link="camera_link"/>
+  </link>
+
+  <!-- REP 103 optical frame: z forward, x right, y down -->
+  <link name="camera_optical_frame"/>
+
+  <!-- Servo positive = CCW seen from the horn. Pan: horn is fixed to the base, so the
+       case turns CCW seen from above (+Z). Tilt: horn faces pan_link +Y, so +tilt pitches
+       the camera UP.
+       These axes must match each servo's Drive Mode in pan_tilt.ros2_control.xacro: bit 0
+       (reverse) flips the physical direction, so flipping it means flipping the axis here too.
+       Pan: Drive Mode 4 (normal) -> +Z. Tilt: Drive Mode 5 (reversed) -> -Y. -->
+  <joint name="pan_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="pan_link"/>
+    <origin xyz="0 0 ${pan_joint_z}" rpy="0 0 ${radians(pan_zero_offset_deg)}"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${pan_lower}" upper="${pan_upper}" effort="${max_effort}" velocity="${max_velocity}"/>
+  </joint>
+
+  <joint name="tilt_joint" type="revolute">
+    <parent link="pan_link"/>
+    <child link="tilt_link"/>
+    <origin xyz="${-tilt_axis_offset} 0 ${tilt_axis_z}" rpy="0 ${radians(tilt_zero_offset_deg)} 0"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="${tilt_lower}" upper="${tilt_upper}" effort="${max_effort}" velocity="${max_velocity}"/>
+  </joint>
+
+  <joint name="camera_joint" type="fixed">
+    <parent link="tilt_link"/>
+    <child link="camera_link"/>
+    <origin xyz="${lens_front_x} ${optical_axis_y} 0"/>
+  </joint>
+
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_optical_frame"/>
+    <origin rpy="${-pi/2} 0 ${-pi/2}"/>
+  </joint>
+
+  <xacro:pan_tilt_ros2_control
+      use_mock_hardware="$(arg use_mock_hardware)"
+      port_name="$(arg port_name)"
+      baud_rate="$(arg baud_rate)"/>
+</robot>

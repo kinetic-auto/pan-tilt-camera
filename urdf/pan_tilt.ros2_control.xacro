@@ -1,0 +1,86 @@
+<?xml version="1.0"?>
+<!--
+  ros2_control config for a 2XL430-W250-T pan/tilt on ROS 2 Humble.
+  Based on ROBOTIS open_manipulator_x (humble) + dynamixel_hardware_interface.
+  Axis 1 (ID 1) = pan, axis 2 (ID 2) = tilt. Joints map to gpio blocks in order.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="dxl_axis" params="name id min_tick max_tick p_gain:=640 i_gain:=0 drive_mode:=5">
+    <gpio name="${name}">
+      <param name="type">dxl</param>
+      <param name="ID">${id}</param>
+      <command_interface name="Goal Position"/>
+      <state_interface name="Present Position"/>
+      <state_interface name="Present Velocity"/>
+      <!-- 3 = position mode. Drive Mode: 4 = time-based profile (bit 2), 5 = same + reversed direction (bit 0). Pan uses 4, tilt 5. -->
+      <param name="Operating Mode">3</param>
+      <param name="Drive Mode">${drive_mode}</param>
+      <param name="Return Delay Time">0</param>
+      <!-- Time-based profile: light 50 ms smoothing; the trajectory controller does the real motion planning -->
+      <param name="Profile Velocity">50</param>
+      <param name="Profile Acceleration">25</param>
+      <!-- Position loop gains (factory: P 640, I 0). An I term removes steady-state error from friction. -->
+      <param name="Position P Gain">${p_gain}</param>
+      <param name="Position I Gain">${i_gain}</param>
+      <!-- Hardware joint limits (encoder ticks), computed from pan_tilt_limits.xacro -->
+      <param name="Min Position Limit">${min_tick}</param>
+      <param name="Max Position Limit">${max_tick}</param>
+    </gpio>
+  </xacro:macro>
+
+  <xacro:macro name="pan_tilt_ros2_control" params="use_mock_hardware port_name baud_rate">
+    <ros2_control name="pan_tilt" type="system">
+      <hardware>
+        <xacro:if value="${use_mock_hardware}">
+          <plugin>mock_components/GenericSystem</plugin>
+        </xacro:if>
+        <xacro:unless value="${use_mock_hardware}">
+          <plugin>dynamixel_hardware_interface/DynamixelHardware</plugin>
+          <param name="port_name">${port_name}</param>
+          <param name="baud_rate">${baud_rate}</param>
+          <param name="error_timeout_sec">0.2</param>
+          <param name="dynamixel_model_folder">/param/dxl_model</param>
+          <param name="number_of_joints">2</param>
+          <param name="number_of_transmissions">2</param>
+          <param name="transmission_to_joint_matrix">
+            1, 0,
+            0, 1
+          </param>
+          <param name="joint_to_transmission_matrix">
+            1, 0,
+            0, 1
+          </param>
+          <param name="ros_update_freq">100</param>
+          <param name="dynamixel_state_pub_msg_name">dynamixel_hardware_interface/dxl_state</param>
+          <param name="get_dynamixel_data_srv_name">dynamixel_hardware_interface/get_dxl_data</param>
+          <param name="set_dynamixel_data_srv_name">dynamixel_hardware_interface/set_dxl_data</param>
+          <param name="reboot_dxl_srv_name">dynamixel_hardware_interface/reboot_dxl</param>
+          <param name="set_dxl_torque_srv_name">dynamixel_hardware_interface/set_dxl_torque</param>
+        </xacro:unless>
+      </hardware>
+
+      <joint name="pan_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="tilt_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+
+      <xacro:unless value="${use_mock_hardware}">
+        <!-- Pan tuned 2026-11-16 with reduced load: P sweep 640-1800, I 0-300. I>0 overshoots ~1 deg and sticks;
+             P=1300/I=0 lands within 0.26 deg, no overshoot, settles in ~0.06 s. 1800 starts to overshoot. -->
+        <xacro:dxl_axis name="dxl1" id="1" min_tick="${pan_min_tick}"  max_tick="${pan_max_tick}" p_gain="1300" i_gain="0" drive_mode="4"/>
+        <xacro:dxl_axis name="dxl2" id="2" min_tick="${tilt_min_tick}" max_tick="${tilt_max_tick}"/>
+      </xacro:unless>
+    </ros2_control>
+  </xacro:macro>
+</robot>

@@ -1,0 +1,39 @@
+# "/**/" matches these nodes in any namespace (the launch puts them under /pan_tilt_camera)
+/**/controller_manager:
+  ros__parameters:
+    update_rate: 100  # Hz. Keep modest over WSL/USB-IP and 57600 baud.
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    pan_tilt_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+/**/pan_tilt_controller:
+  ros__parameters:
+    joints:
+      - pan_joint
+      - tilt_joint
+
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+
+    state_publish_rate: 50.0
+    action_monitor_rate: 20.0
+
+    allow_partial_joints_goal: true   # lets you command just pan or just tilt
+    open_loop_control: true           # servo runs its own position loop
+    allow_integration_in_goal_trajectories: true
+
+    constraints:
+      stopped_velocity_tolerance: 0.02
+      goal_time: 1.5                  # s of slack allowed after the trajectory ends (raised from 0.5 for loaded payload)
+      pan_joint:
+        trajectory: 0.0               # 0 = don't abort on tracking error mid-move
+        goal: 0.03                    # rad (~1.7 deg) to count as arrived
+      tilt_joint:
+        trajectory: 0.0
+        goal: 0.03

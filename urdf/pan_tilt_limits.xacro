@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<!--
+  ONE place to edit the pan/tilt joint limits.
+  These values feed BOTH:
+    - the URDF <limit> tags (RViz, MoveIt, move_camera.py), in radians
+    - the servo's own Min/Max Position Limit (EEPROM), in encoder ticks
+  so the software limits and the hardware stop always agree.
+
+  0 deg = servo center (tick 2048). Check the direction of each axis on the
+  real hardware before widening these.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:property name="pan_min_deg"  value="-150"/>
+  <xacro:property name="pan_max_deg"  value="150"/>
+  <xacro:property name="tilt_min_deg" value="0"/>
+  <xacro:property name="tilt_max_deg" value="90"/>
+
+  <!-- rad/s, used in the URDF <limit velocity>. 2XL430 no-load max is ~6 rad/s at 12 V -->
+  <xacro:property name="max_velocity" value="3.0"/>
+  <!-- N*m, 2XL430 stall torque is ~1.4 N*m at 12 V -->
+  <xacro:property name="max_effort" value="1.4"/>
+
+  <!-- Encoder conversion (matches dynamixel_hardware_interface 2xl430_w250.model) -->
+  <xacro:property name="rad_per_tick" value="0.0015339807878856412"/>
+  <xacro:property name="center_tick"  value="2048"/>
+
+  <!-- Derived values: do not edit -->
+  <xacro:property name="pan_lower"  value="${radians(pan_min_deg)}"/>
+  <xacro:property name="pan_upper"  value="${radians(pan_max_deg)}"/>
+  <xacro:property name="tilt_lower" value="${radians(tilt_min_deg)}"/>
+  <xacro:property name="tilt_upper" value="${radians(tilt_max_deg)}"/>
+
+  <xacro:property name="pan_min_tick"  value="${int(round(center_tick + pan_lower / rad_per_tick))}"/>
+  <xacro:property name="pan_max_tick"  value="${int(round(center_tick + pan_upper / rad_per_tick))}"/>
+  <xacro:property name="tilt_min_tick" value="${int(round(center_tick + tilt_lower / rad_per_tick))}"/>
+  <xacro:property name="tilt_max_tick" value="${int(round(center_tick + tilt_upper / rad_per_tick))}"/>
+</robot>
