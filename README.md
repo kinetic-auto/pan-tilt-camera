@@ -9,7 +9,10 @@ pan_tilt_camera/
 ├── urdf/pan_tilt.ros2_control.xacro  Dynamixel hardware config (IDs, modes, servo limits)
 ├── config/controllers.yaml           joint_state_broadcaster + joint_trajectory_controller
 ├── launch/pan_tilt.launch.py         starts everything (+ RViz)
-└── scripts/move_camera.py            send a pan/tilt move and wait for it to finish
+├── src/move_camera.cpp               send a pan/tilt move and wait for it to finish
+├── src/circle_demo.cpp               sweep the aim around a circle
+├── src/sine_demo.cpp                 sweep along a sine wave (pan = x, tilt = y)
+└── src/pan_tilt_client.cpp           shared C++ helpers (include/pan_tilt_camera/pan_tilt_client.hpp)
 ```
 
 ## Build
@@ -48,8 +51,11 @@ collisions: `/pan_tilt_camera/joint_states`, `/pan_tilt_camera/robot_description
 ## Move it
 
 ```bash
-ros2 run pan_tilt_camera move_camera.py 45 20     # pan 45 deg, tilt 20 deg
-ros2 run pan_tilt_camera move_camera.py           # demo sequence
+ros2 run pan_tilt_camera move_camera 45 20       # pan 45 deg, tilt 20 deg
+ros2 run pan_tilt_camera move_camera             # demo sequence
+ros2 run pan_tilt_camera circle_demo             # circle: --radius --center-pan --center-tilt --period --loops --clockwise
+ros2 run pan_tilt_camera sine_demo               # sine wave: --width --amplitude --cycles --pass-time --passes
+ros2 run pan_tilt_camera circle_demo --help      # all options; --dry-run prints the path without moving
 ```
 
 Or from the command line (radians, both arrive at time_from_start):
@@ -73,7 +79,7 @@ Edit only `urdf/pan_tilt_limits.xacro`. The same numbers become:
 
 | Layer | What enforces it |
 |---|---|
-| URDF `<limit>` (radians) | RViz, MoveIt, `move_camera.py` clamps targets |
+| URDF `<limit>` (radians) | RViz, MoveIt, `move_camera` clamps targets; the demos refuse paths outside them |
 | Servo Min/Max Position Limit (ticks, written at startup) | The servo itself refuses to go past it, even if ROS sends a bad command |
 
 The ROS 2 Humble trajectory controller does **not** check position limits on its own, so the

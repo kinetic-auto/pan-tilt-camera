@@ -2,7 +2,7 @@
 <!--
   ONE place to edit the pan/tilt joint limits.
   These values feed BOTH:
-    - the URDF <limit> tags (RViz, MoveIt, move_camera.py), in radians
+    - the URDF <limit> tags (RViz, MoveIt, move_camera), in radians
     - the servo's own Min/Max Position Limit (EEPROM), in encoder ticks
   so the software limits and the hardware stop always agree.
 
